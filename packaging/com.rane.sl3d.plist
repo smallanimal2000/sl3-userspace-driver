@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.rane.sl3d</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/sl3d</string>
+		<string>48000</string>
+	</array>
+	<!-- Interactive: exempt from launchd CPU/IO throttling. A background daemon is
+	     throttled enough to drop ~12% of isochronous USB transfers (audio glitches). -->
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/var/log/sl3d.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/sl3d.log</string>
+</dict>
+</plist>

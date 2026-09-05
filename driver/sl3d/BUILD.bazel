@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+# The shared-memory ABI contract sl3d exposes; consumed by the C plugin + tap.
+cc_library(
+    name = "shm_contract",
+    hdrs = ["include/sl3_shm.h"],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
+
+rust_binary(
+    name = "sl3d",
+    srcs = [
+        "src/main.rs",
+        "src/shm.rs",
+    ],
+    edition = "2021",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//driver/sl3:sl3",
+        "@crates//:libc",
+        "@crates//:pollster",
+    ],
+)

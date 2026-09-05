@@ -1,0 +1,30 @@
+# --- Bazel ---
+/bazel-*
+# MODULE.bazel.lock is committed (pins the dependency graph).
+
+# --- packaging output ---
+/dist/
+
+# --- Cargo (optional local dev; Bazel is the build system) ---
+/driver/target/
+/api/target/
+**/*.rs.bk
+
+# --- macOS ---
+.DS_Store
+._*
+
+# --- editors ---
+.vscode/
+.idea/
+*.swp
+
+# --- local artifacts ---
+*.wav
+
+# --- wasm-pack output (generated from driver/sl3) ---
+/web/pkg/
+
+# --- web demo (Vite) ---
+/web/node_modules/
+/web/dist/

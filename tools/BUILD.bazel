@@ -1,0 +1,20 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "sl3-shmtap",
+    srcs = ["sl3-shmtap.cpp"],
+    visibility = ["//visibility:public"],
+    deps = ["//driver/sl3d:shm_contract"],
+)
+
+# Reliable CoreAudio recorder + 6-channel input meter for the SL 3.
+cc_binary(
+    name = "sl3-record",
+    srcs = ["sl3-record.cpp"],
+    linkopts = [
+        "-framework", "AudioToolbox",
+        "-framework", "CoreAudio",
+        "-framework", "CoreFoundation",
+    ],
+    visibility = ["//visibility:public"],
+)

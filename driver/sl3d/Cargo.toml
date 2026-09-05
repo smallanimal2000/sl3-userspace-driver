@@ -1,0 +1,14 @@
+[package]
+name = "sl3d"
+version = "0.1.0"
+edition = "2021"
+description = "SL 3 audio daemon: bridges the USB device to the CoreAudio plugin via shared memory"
+
+[dependencies]
+sl3 = { path = "../sl3" }
+libc = "0.2"
+pollster = "0.4"
+
+[[bin]]
+name = "sl3d"
+path = "src/main.rs"

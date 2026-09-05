@@ -1,0 +1,14 @@
+{
+  "name": "sl3-webusb-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "wasm": "wasm-pack build ../driver/sl3 --target web --out-dir ../../web/pkg",
+    "dev": "npm run wasm && vite",
+    "build": "npm run wasm && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

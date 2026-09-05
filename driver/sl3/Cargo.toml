@@ -1,0 +1,69 @@
+[package]
+name = "sl3"
+version = "0.1.0"
+edition = "2021"
+description = "Userland driver for the Rane SL 3 USB DJ audio interface"
+
+[lib]
+# rlib for the native bins/daemon/api crate; cdylib for the wasm-bindgen build.
+crate-type = ["rlib", "cdylib"]
+
+# ---- transport-agnostic (both native and wasm) ----
+[dependencies]
+async-trait = "0.1"
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
+
+# ---- native backend (libusb via rusb + raw libusb1-sys for iso) ----
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusb = "0.9"
+libusb1-sys = "0.7"
+libc = "0.2"
+pollster = "0.4"
+
+# ---- WebUSB backend (browser) ----
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = [
+    "Navigator",
+    "Window",
+    "WorkerGlobalScope",
+    "WorkerNavigator",
+    "Usb",
+    "UsbDevice",
+    "UsbConfiguration",
+    "UsbInterface",
+    "UsbAlternateInterface",
+    "UsbControlTransferParameters",
+    "UsbInTransferResult",
+    "UsbOutTransferResult",
+    "UsbIsochronousInTransferResult",
+    "UsbIsochronousInTransferPacket",
+    "UsbIsochronousOutTransferResult",
+    "UsbIsochronousOutTransferPacket",
+    "UsbDeviceRequestOptions",
+    "UsbDeviceFilter",
+    "UsbTransferStatus",
+    "console",
+]
+
+[[bin]]
+name = "sl3-probe"
+path = "src/bin/probe.rs"
+
+[[bin]]
+name = "sl3-ctl"
+path = "src/bin/ctl.rs"
+
+[[bin]]
+name = "sl3-capture"
+path = "src/bin/capture.rs"
+
+[[bin]]
+name = "sl3-tone"
+path = "src/bin/tone.rs"

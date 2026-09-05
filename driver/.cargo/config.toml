@@ -1,0 +1,5 @@
+# web-sys's WebUSB bindings (Usb, UsbDevice, isochronous transfer types) are
+# gated behind an unstable cfg. Applied only to the wasm target, so native
+# builds (bins, daemon, api framework) are unaffected.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg=web_sys_unstable_apis"]

@@ -1,0 +1,14 @@
+load("@rules_rust//rust:defs.bzl", "rust_shared_library")
+
+# Drop-in Sl3Api.framework implementation — a cdylib exporting the C ABI.
+# Output: libSl3Api.dylib (assembled into a .framework by packaging/build-framework.sh).
+rust_shared_library(
+    name = "Sl3Api",
+    srcs = ["src/lib.rs"],
+    edition = "2021",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//driver/sl3:sl3",
+        "@crates//:pollster",
+    ],
+)

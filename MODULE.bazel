@@ -1,0 +1,38 @@
+module(name = "lane_sl3", version = "0.1.0")
+
+bazel_dep(name = "rules_rust", version = "0.74.0")
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "apple_support", version = "1.24.2")
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# --- Rust toolchain ---
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["1.89.0"],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+# --- external crates (declared directly; no Cargo workspace needed) ---
+# `vendored` makes libusb1-sys compile libusb from source, so the Bazel sandbox
+# needs no system libusb / pkg-config.
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.spec(package = "rusb", version = "0.9.4", features = ["vendored"])
+crate.spec(package = "libusb1-sys", version = "0.7.0")
+crate.spec(package = "libc", version = "0.2")
+# Async plumbing for the transport-agnostic driver core (native backend).
+# The WebUSB backend's deps (wasm-bindgen/web-sys/…) are wasm-only and built via
+# cargo + wasm-pack, not Bazel — see web/README.md.
+crate.spec(package = "async-trait", version = "0.1")
+crate.spec(package = "futures", version = "0.3")
+crate.spec(package = "pollster", version = "0.4")
+crate.from_specs(
+    name = "crates",
+    # Default triples omit Intel macOS; list both Apple targets explicitly.
+    supported_platform_triples = [
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+    ],
+)
+use_repo(crate, "crates")

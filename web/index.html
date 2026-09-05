@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SL 3 — WebUSB</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         background: #12141a; color: #e6e8ee; margin: 0; padding: 2rem; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
+  .sub { color: #8b90a0; margin: 0 0 1.5rem; }
+  button { font: inherit; background: #232838; color: #e6e8ee; border: 1px solid #384056;
+           border-radius: 6px; padding: .4rem .8rem; cursor: pointer; }
+  button:hover:not(:disabled) { background: #2c3247; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .75rem; }
+  .card { background: #1a1d27; border: 1px solid #262b3a; border-radius: 10px;
+          padding: 1rem 1.25rem; max-width: 720px; margin-bottom: 1rem; }
+  .meters { display: grid; grid-template-columns: 3rem 1fr 4rem; gap: .35rem .6rem; align-items: center; }
+  .bar { height: 10px; background: #2a3042; border-radius: 5px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0%;
+                background: linear-gradient(90deg,#3a7,#7c4,#fd5,#f74); transition: width .05s linear; }
+  #log { white-space: pre-wrap; background: #0d0f15; border: 1px solid #262b3a; border-radius: 8px;
+         padding: .75rem 1rem; max-width: 720px; height: 12rem; overflow: auto; color: #aeb4c6; }
+  code { color: #9ecbff; }
+</style>
+</head>
+<body>
+  <h1>Rane SL 3 — WebUSB control &amp; audio</h1>
+  <p class="sub">Chromium-family browser required. Open over <code>https://</code> or <code>http://localhost</code>, then Connect from the button (WebUSB needs a user gesture).</p>
+
+  <div class="card">
+    <div class="row">
+      <button id="connect">Connect</button>
+      <span id="state" class="sub" style="margin:0">not connected</span>
+    </div>
+    <div class="row">
+      <button class="ctl" id="status" disabled>Get status</button>
+      <button class="ctl" id="rate44" disabled>Rate 44.1k</button>
+      <button class="ctl" id="rate48" disabled>Rate 48k</button>
+      <button class="ctl" id="overload" disabled>Read overload</button>
+      <button class="ctl" id="outon" disabled>Aux out ON</button>
+      <button class="ctl" id="outoff" disabled>Aux out off</button>
+    </div>
+    <div class="row">
+      <button class="ctl" id="capture" disabled>Start capture</button>
+      <button class="ctl" id="playtone" disabled>Play 440 Hz tone</button>
+      <button class="ctl" id="duplex" disabled>Play + Capture</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="meters" id="meters"></div>
+  </div>
+
+  <div id="log"></div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

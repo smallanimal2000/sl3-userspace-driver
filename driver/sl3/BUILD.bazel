@@ -1,0 +1,71 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+
+rust_library(
+    name = "sl3",
+    srcs = [
+        "src/lib.rs",
+        "src/proto.rs",
+        "src/device.rs",
+        "src/stream.rs",
+        "src/native_audio.rs",
+        "src/transport.rs",
+        "src/transport/native.rs",
+        # wasm-only modules (cfg'd out on native; built via wasm-pack, not Bazel).
+        "src/transport/webusb.rs",
+        "src/wasm.rs",
+    ],
+    edition = "2021",
+    proc_macro_deps = ["@crates//:async-trait"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:futures",
+        "@crates//:libc",
+        "@crates//:libusb1-sys",
+        "@crates//:rusb",
+    ],
+)
+
+# Inline #[cfg(test)] unit tests (the pure proto.rs HID codec).
+rust_test(
+    name = "sl3_test",
+    crate = ":sl3",
+    edition = "2021",
+    visibility = ["//visibility:public"],
+)
+
+rust_binary(
+    name = "sl3-probe",
+    srcs = ["src/bin/probe.rs"],
+    edition = "2021",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":sl3",
+        "@crates//:rusb",
+    ],
+)
+
+[
+    rust_binary(
+        name = tool,
+        srcs = ["src/bin/%s.rs" % tool.removeprefix("sl3-")],
+        edition = "2021",
+        visibility = ["//visibility:public"],
+        deps = [
+            ":sl3",
+            "@crates//:pollster",
+        ],
+    )
+    for tool in [
+        "sl3-ctl",
+        "sl3-capture",
+        "sl3-tone",
+    ]
+]
+
+rust_binary(
+    name = "natone",
+    srcs = ["src/bin/natone.rs"],
+    edition = "2021",
+    visibility = ["//visibility:public"],
+    deps = [":sl3"],
+)

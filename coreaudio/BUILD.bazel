@@ -1,0 +1,20 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+# The AudioServerPlugin executable (Mach-O bundle). Assembled into SL3.driver by
+# packaging/install.sh. Reads the shm contract; never touches USB.
+cc_binary(
+    name = "SL3",
+    srcs = [
+        "SL3PlugIn.cpp",
+        "SL3Properties.inc",
+    ],
+    linkopts = [
+        "-bundle",
+        "-framework",
+        "CoreAudio",
+        "-framework",
+        "CoreFoundation",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["//driver/sl3d:shm_contract"],
+)

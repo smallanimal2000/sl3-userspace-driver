@@ -1,0 +1,13 @@
+[package]
+name = "sl3api"
+version = "0.1.0"
+edition = "2021"
+description = "Drop-in reimplementation of Rane's Sl3Api.framework, backed by the Rust sl3 driver"
+
+[lib]
+name = "Sl3Api"
+crate-type = ["cdylib"]
+
+[dependencies]
+sl3 = { path = "../driver/sl3" }
+pollster = "0.4"
