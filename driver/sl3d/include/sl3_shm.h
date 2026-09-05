@@ -16,7 +16,7 @@
 
 #define SL3_SHM_NAME     "/sl3_audio"
 #define SL3_SHM_MAGIC    0x334C5341u   // 'ASL3'
-#define SL3_SHM_VERSION  1
+#define SL3_SHM_VERSION  2
 
 #define SL3_SHM_CHANNELS 6
 // Ring capacity in frames per direction (power of two for cheap masking).
@@ -48,6 +48,14 @@ struct sl3_shm {
     // advanced. Plugin uses (cap_write, clock_host) in GetZeroTimeStamp so
     // coreaudiod tracks the REAL device rate instead of a fake host-locked 48000.
     std::atomic<uint64_t> clock_host;
+
+    // Client IO activity, published by the plugin: 1 while coreaudiod is running
+    // IO against this device (>=1 client), 0 when fully idle. The daemon watches
+    // this to suspend the (always-on, ~20% CPU) USB isochronous stream when no
+    // app is using the device, and to resume it on the next StartIO. An explicit
+    // flag is required because a suspended daemon produces no capture data, so the
+    // ring indices never move for an input-only client — they can't signal resume.
+    std::atomic<uint32_t> io_running;
 };
 
 // 24-bit int (sign-extended in int32) <-> float32 [-1,1) conversions.

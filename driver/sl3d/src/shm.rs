@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64};
 
 pub const NAME: &str = "/sl3_audio";
 pub const MAGIC: u32 = 0x334C_5341; // 'ASL3'
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const CHANNELS: usize = 6;
 pub const RING_FRAMES: u64 = 32768;
 pub const RING_MASK: u64 = RING_FRAMES - 1;
@@ -37,11 +37,16 @@ pub struct Shm {
     // (cap_write, clock_host) so GetZeroTimeStamp reports the REAL device rate,
     // not a fake host-locked 48000 — otherwise coreaudiod drifts vs the device.
     pub clock_host: AtomicU64,
+    // Client IO activity, published by the plugin (1 = coreaudiod is running IO,
+    // 0 = idle). The daemon suspends the USB iso stream while this is 0. See the
+    // matching field in driver/sl3d/include/sl3_shm.h.
+    pub io_running: AtomicU32,
 }
 
 /// Debug check that the Rust layout matches the C struct.
 pub fn assert_layout() {
-    assert_eq!(size_of::<Shm>(), 64 + 2 * RING_SAMPLES * 4 + 8);
+    // clock_host (u64) + io_running (u32) + 4 bytes trailing pad (8-byte align) = 16.
+    assert_eq!(size_of::<Shm>(), 64 + 2 * RING_SAMPLES * 4 + 16);
 }
 
 #[inline]

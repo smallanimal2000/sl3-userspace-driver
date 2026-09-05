@@ -225,6 +225,16 @@ each masking the next. Every premature "it's fixed" came from peeling one layer.
 5. **Don't strip "suspect" complexity without a hardware A/B at the right timescale.**
    Implicit feedback and RT scheduling both looked removable and both were essential.
 6. **Keep diagnostics off the real-time thread**; make them counters, print at teardown.
+7. **"Idle" CPU is a design choice, not a leak.** sl3d's ~20% at rest was the
+   always-on full-duplex iso stream, not a busy-wait. The fix is to *stop streaming*
+   when idle, not to shave the hot path. Sample the actual stacks before optimizing —
+   the trivial per-sample conversion was never the cost.
+8. **A suspended producer can't be woken by watching ring indices.** While sl3d stops,
+   it writes no capture frames, so `cap_read` never advances for an input-only client
+   (`avail==0 → consumed==0`). Resume needs an *explicit* activity flag published by
+   the plugin (`io_running`), not inferred counter movement. Output-only would have
+   moved `play_write`, but input-only is silent — the general rule is: don't infer
+   liveness from a channel the suspended side has frozen.
 
 ---
 
@@ -263,3 +273,55 @@ each masking the next. Every premature "it's fixed" came from peeling one layer.
 - **M6d**: verify the original `SL 3 Audio Control Panel.prefPane` drives the userland
   driver via the drop-in `Sl3Api.framework` (macOS legacy-prefPane / library-validation
   caveats noted).
+
+---
+
+## 8. Idle CPU: suspend the USB stream when no client is doing IO
+
+**Symptom.** sl3d burned a steady ~20% CPU (PID sample: ~36 min CPU over ~3 h) even
+with nothing playing.
+
+**Root cause (not a bug).** The daemon ran a full-duplex isochronous stream *at all
+times* — capture IN and playback OUT both live regardless of activity — because
+(a) implicit feedback locks OUT to the IN clock, so OUT must always mirror IN, and
+(b) the plugin's `GetZeroTimeStamp` relies on the `(cap_write, clock_host)` anchor
+that only the running capture stream advances. At 48 kHz that's ~8000 iso packets/s
+each direction → ~1000 transfer-completion callbacks/s serviced by libusb/IOKit. The
+cost is that servicing, **not** the per-sample s24↔f32 conversion (which is trivial).
+Not a busy-wait: `libusb_handle_events_timeout_completed` blocks in poll.
+
+**Fix (this change).** Stream only while a CoreAudio client is doing IO; otherwise drop
+the stream and light-poll. Idle now costs ~0% instead of ~20%.
+
+- **New shm field `io_running`** (`sl3_shm.h` / `shm.rs`, **version bumped 1→2**). The
+  plugin sets it `1` in `StartIO` (first client) and `0` in `StopIO` (last client) —
+  it just mirrors its existing `gIORunning` refcount.
+- **Daemon** (`sl3d/src/main.rs`): the device stays *open* across idle (interfaces
+  claimed, **alt-setting 0 → zero USB bandwidth**); the iso stream runs only while
+  `io_running != 0`. Idle → `sleep(10 ms)` poll loop. The capture callback counts
+  frames seen while `io_running == 0` and stops the stream after ~1 s of idle
+  (debounces apps that briefly stop/restart IO). On suspend it clears `clock_host` so
+  the plugin's `GetZeroTimeStamp` takes its host-locked fallback instead of a stale
+  anchor during the resume gap.
+
+**Why an explicit flag (not counter-watching).** While suspended the daemon produces
+no capture data, so `cap_read` never advances for an **input-only** client
+(`avail==0 → consumed==0`). There is no ring movement to signal resume — hence the
+plugin must publish activity explicitly. (See lesson 8.)
+
+**ABI note.** The field is appended after `clock_host`, so existing offsets are
+unchanged (an un-recompiled `sl3-shmtap` still reads fine). Size grows +8 (u32 + 8-byte
+trailing pad): C `sizeof=1572944`, `io_running` at offset `1572936`; matches Rust
+`assert_layout` (`64 + 2·RING_SAMPLES·4 + 16`). The version bump forces the daemon to
+recreate the segment on install — **plugin and daemon must be reinstalled together**;
+a v1 plugin against a v2 daemon would misread the layout.
+
+**Trade-off.** First ~10–80 ms after playback/record starts runs on the host-locked
+clock fallback + primed silence — a brief one-time transient at stream start, masked by
+the playback cushion. Accepted as the price of ~0% idle. Implicit feedback and RT
+scheduling are untouched (they only run while actually streaming now).
+
+**Status: built, ABI-verified, NOT yet hardware-tested.** Needs on-device confirmation
+after installing both components: idle → ~0% (`top -pid <sl3d>`), glitch-free resume on
+play *and* record, and input-only wake. `sl3-shmtap` will read 0 heartbeats while
+suspended — that is now correct (idle), not a hang.

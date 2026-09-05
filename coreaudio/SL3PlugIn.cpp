@@ -151,6 +151,10 @@ static OSStatus StartIO(AudioServerPlugInDriverRef, AudioObjectID inDeviceID, UI
         ensure_shm();
         if (gShm) {   // start reading/writing from "now"
             gShm->sample_rate.store((uint32_t)gSampleRate); // tell the daemon our rate
+            // Wake the daemon FIRST: it suspends the USB stream when idle, so raise
+            // io_running before mirroring the indices. The daemon resets the ring on
+            // resume; snapping cap_read/play_write here aligns us to a live stream.
+            gShm->io_running.store(1);
             gShm->cap_read.store(gShm->cap_write.load());
             gShm->play_write.store(gShm->play_read.load());
         }
@@ -161,7 +165,9 @@ static OSStatus StartIO(AudioServerPlugInDriverRef, AudioObjectID inDeviceID, UI
 static OSStatus StopIO(AudioServerPlugInDriverRef, AudioObjectID inDeviceID, UInt32) {
     if (inDeviceID != kObjectID_Device) return kAudioHardwareBadObjectError;
     pthread_mutex_lock(&gMutex);
-    if (gIORunning > 0) gIORunning--;
+    if (gIORunning > 0 && --gIORunning == 0) {
+        if (gShm) gShm->io_running.store(0); // last client left -> daemon may suspend
+    }
     pthread_mutex_unlock(&gMutex);
     return noErr;
 }
