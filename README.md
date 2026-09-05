@@ -6,6 +6,20 @@ but UAC2-shaped: 6ch/24-bit audio over vendor isochronous endpoints, plus a
 64-byte HID control channel. See [`docs/protocol.md`](docs/protocol.md) for the
 reverse-engineered protocol.
 
+> [!WARNING]
+> **Unofficial, unsupported, use at your own risk.** This is an independent,
+> community reverse-engineering effort. It is **not affiliated with, endorsed by,
+> or supported by Rane, Serato, inMusic, or any related company.** "Rane",
+> "Serato", and "SL 3" are trademarks of their respective owners, used here only
+> to identify the hardware this driver targets.
+>
+> This project ships no vendor firmware, code, or assets — only original,
+> independently written software. Using it may violate the End User License
+> Agreement of the original driver or software, and may void warranties or
+> damage your hardware. There is **no warranty of any kind**. You are solely
+> responsible for ensuring your use complies with all applicable licenses, laws,
+> and agreements.
+
 ## Architecture
 
 The **driver is Rust** (`driver/`). Only the CoreAudio plugin remains in C,
