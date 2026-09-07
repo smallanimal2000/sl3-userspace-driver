@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdint.h>
@@ -47,17 +48,31 @@ static UInt32   gIORunning = 0;
 
 // shared memory
 static sl3_shm *gShm = NULL;
+static ino_t   gShmInode = 0;   // identity of the segment gShm points at
 
+// Map the ring if unmapped, and — crucially — RE-map it if the daemon has since
+// replaced the segment. The daemon unlink+recreates /sl3_audio on a version/size
+// change (see shm.rs), which leaves an already-running coreaudiod mapped to an
+// orphaned copy: its magic is still valid, but it is no longer the daemon's live
+// ring, so io_running/cap/play writes vanish into a dead page and audio silently
+// stops in BOTH directions. Detect replacement by inode identity and swap to the
+// new segment. NOT realtime-safe (shm_open/fstat/mmap syscalls): call only from
+// StartIO/StopIO — where no DoIOOperation cycle is in flight on the RT thread —
+// never from the DoIOOperation hot path (which only maps when gShm is still NULL).
 static void ensure_shm() {
-    if (gShm) return;
     int fd = shm_open(SL3_SHM_NAME, O_RDWR, 0666);
-    if (fd < 0) { syslog(LOG_NOTICE, "SL3plugin: shm_open failed errno=%d (%s)", errno, strerror(errno)); return; }
+    if (fd < 0) { if (!gShm) syslog(LOG_NOTICE, "SL3plugin: shm_open failed errno=%d (%s)", errno, strerror(errno)); return; }
+    struct stat st;
+    if (fstat(fd, &st) != 0) { close(fd); return; }
+    if (gShm && st.st_ino == gShmInode) { close(fd); return; } // already on the live segment
     void *p = mmap(NULL, sizeof(sl3_shm), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
     if (p == MAP_FAILED) { syslog(LOG_NOTICE, "SL3plugin: mmap failed errno=%d", errno); return; }
     sl3_shm *s = (sl3_shm *)p;
     if (s->magic != SL3_SHM_MAGIC) { syslog(LOG_NOTICE, "SL3plugin: bad magic 0x%x", s->magic); munmap(p, sizeof(sl3_shm)); return; }
+    if (gShm) { munmap(gShm, sizeof(sl3_shm)); syslog(LOG_NOTICE, "SL3plugin: shm segment replaced, re-mapped"); }
     gShm = s;
+    gShmInode = st.st_ino;
 }
 
 // ============================ COM plumbing =================================

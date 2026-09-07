@@ -222,7 +222,7 @@ impl AudioDevice {
     fn set_device_config(&self, hz: u32) -> Result<()> {
         self.handle.claim_interface(IF_HID).map_err(Error::Access)?;
         let to = std::time::Duration::from_millis(250);
-        let mut cmd = |code: u8, seq: u32, payload: &[u8]| -> Result<()> {
+        let cmd = |code: u8, seq: u32, payload: &[u8]| -> Result<()> {
             let report = crate::proto::build_report(code, seq, payload)?;
             self.handle.write_interrupt(EP_HID_OUT, &report, to).map_err(Error::Io)?;
             // Drain the one reply (required, or the next control OUT stalls).
@@ -237,6 +237,30 @@ impl AudioDevice {
         })();
         let _ = self.handle.release_interface(IF_HID);
         res
+    }
+
+    /// Liveness probe: is the device this handle was opened on still enumerated?
+    ///
+    /// Purely a device-list walk — NO control transfer or other bus I/O, which on
+    /// this device can spuriously fail on a perfectly healthy handle (a false
+    /// "gone" would churn the daemon's reopen loop and block activation). A USB
+    /// address is stable for the lifetime of an attachment and freed on detach, so
+    /// matching our (bus, address) against a fresh enumeration cleanly detects an
+    /// unplug; a reattach lands on a new address, so it reads as gone too and the
+    /// daemon rebinds to the new one. Descriptors are read from libusb's cache.
+    pub fn is_present(&self) -> bool {
+        let dev = self.handle.device();
+        let (bus, addr) = (dev.bus_number(), dev.address());
+        match self.ctx.devices() {
+            Ok(list) => list.iter().any(|d| {
+                d.bus_number() == bus
+                    && d.address() == addr
+                    && d.device_descriptor()
+                        .map(|dd| dd.vendor_id() == VID && dd.product_id() == PID)
+                        .unwrap_or(false)
+            }),
+            Err(_) => true, // can't enumerate -> assume still present rather than churn
+        }
     }
 
     /// Run full-duplex audio until `stop` is set (or the pool empties on error).

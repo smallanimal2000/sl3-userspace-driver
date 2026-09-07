@@ -49,9 +49,26 @@ fn main() {
         // and light-poll, so an idle device costs ~0% CPU instead of the ~20% the
         // always-on full-duplex stream burns. `stream_err` forces a device reopen.
         let mut stream_err = false;
+        // Idle-loop iterations between USB liveness probes (~500 ms at 10 ms/iter).
+        // We can't probe every tick (a control transfer per 10 ms is wasteful), but
+        // must probe *something* or a detach-while-idle goes unnoticed forever.
+        const PROBE_EVERY: u32 = 50;
+        let mut idle_ticks: u32 = 0;
         while !STOP.load(Ordering::Relaxed) {
             // ---- Suspended: no client IO. Hold the device open but idle. ----
             if unsafe { (*shm).io_running.load(Ordering::Relaxed) } == 0 {
+                // Periodically confirm the device is still attached. On detach, drop
+                // the stale handle and re-enumerate — otherwise we'd keep publishing
+                // device_present=1 for a device that's gone and never bind the one
+                // the user plugs back in.
+                idle_ticks += 1;
+                if idle_ticks >= PROBE_EVERY {
+                    idle_ticks = 0;
+                    if !dev.is_present() {
+                        unsafe { (*shm).device_present.store(0, Ordering::Relaxed); }
+                        break; // -> reopen loop
+                    }
+                }
                 unsafe {
                     (*shm).device_present.store(1, Ordering::Relaxed);
                     // Clear the device-clock anchor so the plugin's GetZeroTimeStamp
@@ -62,6 +79,7 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(10)); // resume latency vs idle cost
                 continue;
             }
+            idle_ticks = 0;
 
             // ---- Active: a client started IO. Stream until it goes idle. ----
             // Rate is owned by the control side; we only pace playback to the shm value.
@@ -69,8 +87,19 @@ fn main() {
             let r = if r == 44100 || r == 48000 { r } else { rate };
             unsafe {
                 (*shm).sample_rate.store(r, Ordering::Relaxed);
-                (*shm).cap_write.store(0, Ordering::Relaxed); (*shm).cap_read.store(0, Ordering::Relaxed);
-                (*shm).play_write.store(0, Ordering::Relaxed); (*shm).play_read.store(0, Ordering::Relaxed);
+                // Start each stream from an empty ring, but WITHOUT rewinding the
+                // producer cursors. On a mid-stream device reopen the plugin has not
+                // cycled StopIO/StartIO, so its cap_read has already drained forward
+                // to the (frozen) cap_write. Zeroing cap_write here — as we used to —
+                // would leave cap_read > cap_write, an unsigned underflow in the
+                // plugin's ReadInput (avail ~= 2^64) that self-heals for playback (the
+                // MAXLAT drop) but leaves capture permanently dead. Snapping each
+                // consumer up to its producer instead drops any pending frames while
+                // keeping both cursors monotonic, so avail can never underflow.
+                let cw = (*shm).cap_write.load(Ordering::Relaxed);
+                (*shm).cap_read.store(cw, Ordering::Relaxed);
+                let pw = (*shm).play_write.load(Ordering::Relaxed);
+                (*shm).play_read.store(pw, Ordering::Relaxed);
                 (*shm).device_present.store(1, Ordering::Relaxed);
             }
             println!("sl3d: streaming ({r} Hz)");
@@ -155,8 +184,16 @@ fn main() {
                 stream_err = true; // device likely gone -> reopen
                 break;
             }
-            // Ok: stopped for idle, rate change, or shutdown. The inner loop
-            // re-checks io_running and either suspends or re-streams at the new rate.
+            // Ok: stopped for idle, rate change, or shutdown. A mid-stream detach
+            // also lands here (the iso transfers drain to inflight==0 and run()
+            // returns Ok, not Err), so verify the device is still attached before
+            // re-streaming — otherwise we'd re-arm the stream on a dead handle.
+            if !dev.is_present() {
+                unsafe { (*shm).device_present.store(0, Ordering::Relaxed); }
+                break; // -> reopen loop
+            }
+            // The inner loop re-checks io_running and either suspends or re-streams
+            // at the new rate.
         }
 
         unsafe { (*shm).device_present.store(0, Ordering::Relaxed); }
